@@ -13,7 +13,7 @@ class AppleServiceBrowser {
 
     private var browser: NWBrowser?
 
-    var deviceDiscovered: ((Device) -> Void)?
+    var deviceDiscovered: ((NetworkDevice) -> Void)?
 
     private let parameters: NWParameters = {
         let parameters = NWParameters.udp
@@ -74,7 +74,7 @@ class AppleServiceBrowser {
                                                             hostName = String(hostName.dropLast(postfix.count))
                                                         }
 
-                                                        let device = Device(name: hostName, host: hostAddress, macAddress: macAddress, model: nil)
+                                                        let device = NetworkDevice(name: hostName, host: hostAddress, macAddress: macAddress, model: nil)
 
                                                         self.deviceDiscovered?(device)
                                                     case let .failure(error):

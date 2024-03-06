@@ -10,18 +10,18 @@ import Network
 import NetworkScannerInternal
 
 public protocol NetworkScannerDelegate: AnyObject {
-    func networkScannerDidFinishScanning(devices: [Device])
+    func networkScannerDidFinishScanning(devices: [NetworkDevice])
 }
 
 public class NetworkScanner: NSObject {
-    private var devices: [Device] = []
-    private var appleDevices: [Device] = []
-    private var airPlayDevices: [Device] = []
-    private var googleCastDevices: [Device] = []
+    private var devices: [NetworkDevice] = []
+    private var appleDevices: [NetworkDevice] = []
+    private var airPlayDevices: [NetworkDevice] = []
+    private var googleCastDevices: [NetworkDevice] = []
 
     public weak var delegate: NetworkScannerDelegate?
 
-    var combinedDevices: [Device] {
+    var combinedDevices: [NetworkDevice] {
         var _devices = devices
 
         for (index, device) in _devices.enumerated() {
@@ -112,13 +112,13 @@ public class NetworkScanner: NSObject {
                         if let _ = response.error {
                         } else {
                             validIps.append(ip)
-                            var type = DeviceType.regular
+                            var type = NetworkDeviceType.regular
 
                             if ip == routerIP {
                                 type = .router
                             }
 
-                            self.devices.append(Device(name: "", host: ip, type: type))
+                            self.devices.append(NetworkDevice(name: "", host: ip, type: type))
                         }
 
                         if processed == ips.count {

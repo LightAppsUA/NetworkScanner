@@ -13,7 +13,7 @@ class GoogleCastServiceBrowser {
 
     private var browser: NWBrowser?
 
-    var deviceDiscovered: ((Device) -> Void)?
+    var deviceDiscovered: ((NetworkDevice) -> Void)?
 
     private let parameters: NWParameters = {
         let parameters = NWParameters.udp
@@ -54,7 +54,7 @@ class GoogleCastServiceBrowser {
                                             let normalName = added.metadata.info["fn"]
                                             let model = added.metadata.info["md"]
 
-                                            let device = Device(name: normalName ?? name, host: host.debugDescription.components(separatedBy: "%").first ?? host.debugDescription, macAddress: nil, model: model)
+                                            let device = NetworkDevice(name: normalName ?? name, host: host.debugDescription.components(separatedBy: "%").first ?? host.debugDescription, macAddress: nil, model: model)
 
                                             self.deviceDiscovered?(device)
                                         @unknown default:

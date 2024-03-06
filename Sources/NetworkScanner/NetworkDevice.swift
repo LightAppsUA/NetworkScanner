@@ -7,14 +7,14 @@
 
 import Foundation
 
-public enum DeviceType {
+public enum NetworkDeviceType {
     case regular, router, airPlay, googleCast, appleDevice
 }
 
-public struct Device {
+public struct NetworkDevice {
     public var name: String
     public var host: String
     public var macAddress: String?
     public var model: String?
-    public var type: DeviceType = .regular
+    public var type: NetworkDeviceType = .regular
 }

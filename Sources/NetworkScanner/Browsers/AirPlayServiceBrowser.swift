@@ -13,7 +13,7 @@ class AirPlayServiceBrowser {
 
     private var browser: NWBrowser?
 
-    var deviceDiscovered: ((Device) -> Void)?
+    var deviceDiscovered: ((NetworkDevice) -> Void)?
 
     private let parameters: NWParameters = {
         let parameters = NWParameters.udp
@@ -54,7 +54,7 @@ class AirPlayServiceBrowser {
                                             let macAddress = added.metadata.info["deviceid"]
                                             let model = added.metadata.info["model"]
 
-                                            let device = Device(name: name, host: host.debugDescription.components(separatedBy: "%").first ?? host.debugDescription, macAddress: macAddress, model: model)
+                                            let device = NetworkDevice(name: name, host: host.debugDescription.components(separatedBy: "%").first ?? host.debugDescription, macAddress: macAddress, model: model)
 
                                             self.deviceDiscovered?(device)
                                         @unknown default:
