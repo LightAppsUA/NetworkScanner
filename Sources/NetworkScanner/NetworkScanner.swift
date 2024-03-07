@@ -9,10 +9,6 @@ import Foundation
 import Network
 import NetworkScannerInternal
 
-public protocol NetworkScannerDelegate: AnyObject {
-    func networkScannerDidFinishScanning(devices: [NetworkDevice])
-}
-
 public class NetworkScanner: NSObject {
     private var devices: [NetworkDevice] = []
     private var appleDevices: [NetworkDevice] = []
@@ -48,16 +44,45 @@ public class NetworkScanner: NSObject {
         return _devices
     }
 
-    var timer: Timer?
+    private var timer: Timer?
+
+    private let appleServiceBrowser = AppleServiceBrowser()
+    private let airPlayServiceBrowser = AirPlayServiceBrowser()
+    private let googleCastServiceBrowser = GoogleCastServiceBrowser()
+
+    private var pingers: [SwiftyPing] = []
+
+    public func stop() {
+        for pinger in pingers {
+            pinger.haltPinging()
+        }
+        pingers = []
+
+        timer?.invalidate()
+        timer = nil
+
+        appleServiceBrowser.stop()
+        airPlayServiceBrowser.stop()
+        googleCastServiceBrowser.stop()
+
+        resetData()
+    }
+
+    private func resetData() {
+        appleDevices = []
+        airPlayDevices = []
+        googleCastDevices = []
+        devices = []
+    }
 
     public func start() {
+        stop()
+
         let ipAddress = getIPAddress()
         let mask = getNetmask()
         let routerIP = NetworkHelper.getRouterIP()
 
-        let a = AppleServiceBrowser()
-
-        a.deviceDiscovered = { device in
+        appleServiceBrowser.deviceDiscovered = { device in
             var copyDevice = device
             if copyDevice.host == "127.0.0.1" {
                 copyDevice.host = ipAddress
@@ -65,11 +90,10 @@ public class NetworkScanner: NSObject {
 
             self.appleDevices.append(copyDevice)
         }
-        a.search()
 
-        let b = AirPlayServiceBrowser()
+        appleServiceBrowser.search()
 
-        b.deviceDiscovered = { device in
+        airPlayServiceBrowser.deviceDiscovered = { device in
             var copyDevice = device
             if copyDevice.host == "127.0.0.1" {
                 copyDevice.host = ipAddress
@@ -77,11 +101,10 @@ public class NetworkScanner: NSObject {
 
             self.airPlayDevices.append(copyDevice)
         }
-        b.search()
 
-        let c = GoogleCastServiceBrowser()
+        airPlayServiceBrowser.search()
 
-        c.deviceDiscovered = { device in
+        googleCastServiceBrowser.deviceDiscovered = { device in
             var copyDevice = device
             if copyDevice.host == "127.0.0.1" {
                 copyDevice.host = ipAddress
@@ -89,7 +112,8 @@ public class NetworkScanner: NSObject {
 
             self.googleCastDevices.append(copyDevice)
         }
-        c.search()
+
+        googleCastServiceBrowser.search()
 
         let ips = ipRange(ipAddress: ipAddress, subnetMask: mask)
 
@@ -104,34 +128,39 @@ public class NetworkScanner: NSObject {
                 let ip = ips[currentIndex]
 
                 do {
-                    let s = try SwiftyPing(ipv4Address: ip, config: .init(interval: 1), queue: .global())
+                    currentIndex += 1
 
-                    s.observer = { response in
+                    let pinger = try SwiftyPing(ipv4Address: ip, config: .init(interval: 1), queue: .global())
+
+                    self.pingers.append(pinger)
+
+                    pinger.observer = { response in
                         processed += 1
 
-                        if let _ = response.error {
+                        if let error = response.error {
+                            print(error)
                         } else {
                             validIps.append(ip)
-                            var type = NetworkDeviceType.regular
+                            var type: NetworkDeviceType = .regular
 
                             if ip == routerIP {
                                 type = .router
                             }
 
-                            self.devices.append(NetworkDevice(name: "", host: ip, type: type))
+                            self.devices.append(NetworkDevice(name: ip, host: ip, type: type))
                         }
 
-                        if processed == ips.count {
+                        if processed >= ips.count {
                             self.delegate?.networkScannerDidFinishScanning(devices: self.combinedDevices)
                         }
                     }
 
-                    s.targetCount = 1
+                    pinger.targetCount = 1
 
-                    try s.startPinging()
-                } catch {}
-
-                currentIndex += 1
+                    try pinger.startPinging()
+                } catch {
+                    print(error)
+                }
             } else {
                 timer.invalidate()
             }
@@ -184,7 +213,7 @@ public class NetworkScanner: NSObject {
                     // cellular = ["pdp_ip0","pdp_ip1","pdp_ip2","pdp_ip3"]
 
                     let name = String(cString: interface.ifa_name)
-                    if name == "en0" || name == "en2" || name == "en3" || name == "en4" {
+                    if name == "en0" {
                         var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
                         getnameinfo(interface.ifa_addr, socklen_t(interface.ifa_addr.pointee.sa_len), &hostname, socklen_t(hostname.count), nil, socklen_t(0), NI_NUMERICHOST)
                         address = String(cString: hostname)
@@ -210,8 +239,12 @@ public class NetworkScanner: NSObject {
                 guard let interface = ptr?.pointee else { return "" }
                 let addrFamily = interface.ifa_addr.pointee.sa_family
                 if addrFamily == UInt8(AF_INET) {
+                    // wifi = ["en0"]
+                    // wired = ["en2", "en3", "en4"]
+                    // cellular = ["pdp_ip0","pdp_ip1","pdp_ip2","pdp_ip3"]
+
                     let name = String(cString: interface.ifa_name)
-                    if name == "en0" || name == "en2" || name == "en3" || name == "en4" {
+                    if name == "en0" {
                         var netmaskAddress = [CChar](repeating: 0, count: Int(NI_MAXHOST))
                         getnameinfo(interface.ifa_netmask, socklen_t(interface.ifa_netmask.pointee.sa_len), &netmaskAddress, socklen_t(netmaskAddress.count), nil, socklen_t(0), NI_NUMERICHOST)
                         netmask = String(cString: netmaskAddress)

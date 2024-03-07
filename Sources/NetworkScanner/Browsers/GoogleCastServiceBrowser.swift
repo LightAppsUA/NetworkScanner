@@ -15,7 +15,7 @@ class GoogleCastServiceBrowser {
 
     var deviceDiscovered: ((NetworkDevice) -> Void)?
 
-    private let parameters: NWParameters = {
+    private let connectionParameters: NWParameters = {
         let parameters = NWParameters.udp
         if let isOption = parameters.defaultProtocolStack.internetProtocol as? NWProtocolIP.Options {
             isOption.version = .v4
@@ -24,9 +24,18 @@ class GoogleCastServiceBrowser {
         return parameters
     }()
 
-    func search() {
+    private let browserParameters: NWParameters = {
         let parameters = NWParameters()
-        let browser = NWBrowser(for: .bonjourWithTXTRecord(type: type, domain: nil), using: parameters)
+        parameters.allowLocalEndpointReuse = true
+        parameters.acceptLocalOnly = true
+        parameters.allowFastOpen = true
+        return parameters
+    }()
+
+    func search() {
+        stop()
+
+        let browser = NWBrowser(for: .bonjourWithTXTRecord(type: type, domain: nil), using: browserParameters)
         self.browser = browser
 
         browser.stateUpdateHandler = { newState in
@@ -39,33 +48,26 @@ class GoogleCastServiceBrowser {
             for change in changes {
                 if case let .added(added) = change {
                     if case let .service(name, _, _, _) = added.endpoint {
-                        let netConnection = NWConnection(to: added.endpoint, using: self.parameters)
+                        let netConnection = NWConnection(to: added.endpoint, using: self.connectionParameters)
 
                         netConnection.stateUpdateHandler = { newState in
-                            switch newState {
-                            case .ready:
+                            if case .ready = newState {
                                 guard let currentPath = netConnection.currentPath else { return }
 
                                 if let endpoint = currentPath.remoteEndpoint {
-                                    switch endpoint {
-                                    case let .hostPort(host: host, port: _):
-                                        switch host {
-                                        case .ipv4:
+                                    if case let .hostPort(host: host, port: _) = endpoint {
+                                        if case .ipv4 = host {
                                             let normalName = added.metadata.info["fn"]
                                             let model = added.metadata.info["md"]
 
                                             let device = NetworkDevice(name: normalName ?? name, host: host.debugDescription.components(separatedBy: "%").first ?? host.debugDescription, macAddress: nil, model: model)
 
                                             self.deviceDiscovered?(device)
-                                        @unknown default:
-                                            break
                                         }
-                                    @unknown default:
-                                        break
                                     }
                                 }
-                            @unknown default:
-                                break
+
+                                netConnection.cancel()
                             }
                         }
 

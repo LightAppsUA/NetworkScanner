@@ -9,13 +9,13 @@ import Foundation
 import Network
 
 class AppleServiceBrowser {
-    private let type: String = "_apple-mobdev2._tcp."
+    private let type: String = "_apple-mobdev2._tcp"
 
     private var browser: NWBrowser?
 
     var deviceDiscovered: ((NetworkDevice) -> Void)?
 
-    private let parameters: NWParameters = {
+    private let connectionParameters: NWParameters = {
         let parameters = NWParameters.udp
         if let isOption = parameters.defaultProtocolStack.internetProtocol as? NWProtocolIP.Options {
             isOption.version = .v4
@@ -24,15 +24,18 @@ class AppleServiceBrowser {
         return parameters
     }()
 
-    func search() {
+    private let browserParameters: NWParameters = {
         let parameters = NWParameters()
         parameters.allowLocalEndpointReuse = true
         parameters.acceptLocalOnly = true
         parameters.allowFastOpen = true
+        return parameters
+    }()
 
+    func search() {
         stop()
 
-        let browser = NWBrowser(for: .bonjourWithTXTRecord(type: type, domain: nil), using: parameters)
+        let browser = NWBrowser(for: .bonjourWithTXTRecord(type: type, domain: nil), using: browserParameters)
         self.browser = browser
 
         browser.stateUpdateHandler = { newState in
@@ -45,18 +48,15 @@ class AppleServiceBrowser {
             for change in changes {
                 if case let .added(added) = change {
                     if case let .service(name, type, domain, _) = added.endpoint {
-                        let netConnection = NWConnection(to: added.endpoint, using: self.parameters)
+                        let netConnection = NWConnection(to: added.endpoint, using: self.connectionParameters)
 
                         netConnection.stateUpdateHandler = { newState in
-                            switch newState {
-                            case .ready:
+                            if case .ready = newState {
                                 guard let currentPath = netConnection.currentPath else { return }
 
                                 if let endpoint = currentPath.remoteEndpoint {
-                                    switch endpoint {
-                                    case .hostPort(host: let host, port: _):
-                                        switch host {
-                                        case .ipv4:
+                                    if case .hostPort(host: let host, port: _) = endpoint {
+                                        if case .ipv4 = host {
                                             DispatchQueue.main.async {
                                                 let service = NetService(domain: domain, type: type, name: name)
 
@@ -82,17 +82,11 @@ class AppleServiceBrowser {
                                                     }
                                                 }
                                             }
-                                        @unknown default:
-                                            break
                                         }
-                                    @unknown default:
-                                        break
                                     }
                                 }
 
                                 netConnection.cancel()
-                            @unknown default:
-                                break
                             }
                         }
 
