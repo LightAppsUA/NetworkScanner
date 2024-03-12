@@ -5,6 +5,8 @@ Add this to Info.plist:
 ```xml
     <key>NSBonjourServices</key>
     <array>
+        <string>_bonjour._tcp</string>
+        <string>_lnp._tcp</string>
         <string>_airplay._tcp</string>
         <string>_apple-mobdev2._tcp</string>
         <string>_googlecast._tcp</string>

@@ -10,6 +10,7 @@ import Network
 import NetworkScannerInternal
 
 public class NetworkScanner: NSObject {
+    private let localNetworkAuthorization = LocalNetworkAuthorization()
     private var devices: [NetworkDevice] = []
     private var appleDevices: [NetworkDevice] = []
     private var airPlayDevices: [NetworkDevice] = []
@@ -17,7 +18,7 @@ public class NetworkScanner: NSObject {
 
     public weak var delegate: NetworkScannerDelegate?
 
-    var combinedDevices: [NetworkDevice] {
+    private var combinedDevices: [NetworkDevice] {
         var _devices = devices
 
         for (index, device) in _devices.enumerated() {
@@ -50,13 +51,11 @@ public class NetworkScanner: NSObject {
     private let airPlayServiceBrowser = AirPlayServiceBrowser()
     private let googleCastServiceBrowser = GoogleCastServiceBrowser()
 
-    private var pingers: [SwiftyPing] = []
+    private var operationQueue: OperationQueue?
 
     public func stop() {
-        for pinger in pingers {
-            pinger.haltPinging()
-        }
-        pingers = []
+        operationQueue?.cancelAllOperations()
+        operationQueue = nil
 
         timer?.invalidate()
         timer = nil
@@ -78,93 +77,97 @@ public class NetworkScanner: NSObject {
     public func start() {
         stop()
 
-        let ipAddress = getIPAddress()
-        let mask = getNetmask()
-        let routerIP = NetworkHelper.getRouterIP()
+        localNetworkAuthorization.requestAuthorization { status in
+            if status {
+                let ipAddress = self.getIPAddress()
+                let mask = self.getNetmask()
+                let routerIP = NetworkHelper.getRouterIP()
 
-        appleServiceBrowser.deviceDiscovered = { device in
-            var copyDevice = device
-            if copyDevice.host == "127.0.0.1" {
-                copyDevice.host = ipAddress
-            }
-
-            self.appleDevices.append(copyDevice)
-        }
-
-        appleServiceBrowser.search()
-
-        airPlayServiceBrowser.deviceDiscovered = { device in
-            var copyDevice = device
-            if copyDevice.host == "127.0.0.1" {
-                copyDevice.host = ipAddress
-            }
-
-            self.airPlayDevices.append(copyDevice)
-        }
-
-        airPlayServiceBrowser.search()
-
-        googleCastServiceBrowser.deviceDiscovered = { device in
-            var copyDevice = device
-            if copyDevice.host == "127.0.0.1" {
-                copyDevice.host = ipAddress
-            }
-
-            self.googleCastDevices.append(copyDevice)
-        }
-
-        googleCastServiceBrowser.search()
-
-        let ips = ipRange(ipAddress: ipAddress, subnetMask: mask)
-
-        var validIps: [String] = []
-
-        var currentIndex = 0
-        var processed = 0
-
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true, block: { timer in
-            if currentIndex < ips.count {
-                let ip = ips[currentIndex]
-
-                do {
-                    currentIndex += 1
-
-                    let pinger = try SwiftyPing(ipv4Address: ip, config: .init(interval: 1), queue: .global())
-
-                    self.pingers.append(pinger)
-
-                    pinger.observer = { response in
-                        processed += 1
-
-                        if let error = response.error {
-                            print(error)
-                        } else {
-                            validIps.append(ip)
-                            var type: NetworkDeviceType = .regular
-
-                            if ip == routerIP {
-                                type = .router
-                            }
-
-                            self.devices.append(NetworkDevice(name: ip, host: ip, type: type))
-                        }
-
-                        if processed >= ips.count {
-                            self.delegate?.networkScannerDidFinishScanning(devices: self.combinedDevices)
-                        }
+                self.appleServiceBrowser.deviceDiscovered = { device in
+                    var copyDevice = device
+                    if copyDevice.host == "127.0.0.1" {
+                        copyDevice.host = ipAddress
                     }
 
-                    pinger.targetCount = 1
-
-                    try pinger.startPinging()
-                } catch {
-                    print(error)
+                    self.appleDevices.append(copyDevice)
                 }
-            } else {
-                timer.invalidate()
+
+                self.appleServiceBrowser.search()
+
+                self.airPlayServiceBrowser.deviceDiscovered = { device in
+                    var copyDevice = device
+                    if copyDevice.host == "127.0.0.1" {
+                        copyDevice.host = ipAddress
+                    }
+
+                    self.airPlayDevices.append(copyDevice)
+                }
+
+                self.airPlayServiceBrowser.search()
+
+                self.googleCastServiceBrowser.deviceDiscovered = { device in
+                    var copyDevice = device
+                    if copyDevice.host == "127.0.0.1" {
+                        copyDevice.host = ipAddress
+                    }
+
+                    self.googleCastDevices.append(copyDevice)
+                }
+
+                self.googleCastServiceBrowser.search()
+
+                let ips = self.ipRange(ipAddress: ipAddress, subnetMask: mask)
+
+                var validIps: [String] = []
+
+                var startTime = Date().timeIntervalSince1970
+                var completedOperations = 0
+
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let operationQueue = OperationQueue()
+
+                    self.operationQueue = operationQueue
+
+                    operationQueue.maxConcurrentOperationCount = 100
+                    operationQueue.qualityOfService = .userInteractive
+
+                    for ip in ips {
+                        let o = PingOperation(host: ip)
+
+                        o.completionBlock = {
+                            if o.reachable {
+                                validIps.append(ip)
+                                var type: NetworkDeviceType = .regular
+
+                                if ip == routerIP {
+                                    type = .router
+                                }
+
+                                self.devices.append(NetworkDevice(name: ip, host: ip, type: type))
+                            }
+
+                            completedOperations += 1
+//                            let progress = Double(completedOperations) / Double(ips.count)
+                            //                    print("Progress: \(Int(progress * 100))%")
+
+                            DispatchQueue.main.async {
+                                self.delegate?.networkScannerDidUpdateProgress(currentIndex: completedOperations, totalCount: ips.count)
+                            }
+                        }
+
+                        operationQueue.addOperation(o)
+                    }
+
+                    operationQueue.waitUntilAllOperationsAreFinished()
+
+                    //            print("Time elapsed: ", Date().timeIntervalSince1970 - startTime, "sec")
+
+                    DispatchQueue.main.async {
+                        self.delegate?.networkScannerDidFinishScanning(devices: self.combinedDevices)
+                    }
+                }
             }
-        })
+        }
     }
 
     private func ipRange(ipAddress: String, subnetMask: String) -> [String] {
