@@ -10,7 +10,7 @@ import Network
 import NetworkScannerInternal
 
 public class NetworkScanner: NSObject {
-    private let localNetworkAuthorization = LocalNetworkAuthorization()
+    private lazy var localNetworkAuthorization = LocalNetworkAuthorization()
     private var devices: [NetworkDevice] = []
     private var appleDevices: [NetworkDevice] = []
     private var airPlayDevices: [NetworkDevice] = []
@@ -118,8 +118,6 @@ public class NetworkScanner: NSObject {
 
                 let ips = self.ipRange(ipAddress: ipAddress, subnetMask: mask)
 
-                var validIps: [String] = []
-
                 var startTime = Date().timeIntervalSince1970
                 var completedOperations = 0
 
@@ -128,39 +126,30 @@ public class NetworkScanner: NSObject {
 
                     self.operationQueue = operationQueue
 
-                    operationQueue.maxConcurrentOperationCount = 100
                     operationQueue.qualityOfService = .userInteractive
 
-                    for ip in ips {
+                    let operations = ips.map {
+                        let ip = $0
                         let o = PingOperation(host: ip)
 
-                        o.completionBlock = {
+                        o.completionBlock = { [weak self] in
+                            guard let self else { return }
+
                             if o.reachable {
-                                validIps.append(ip)
-                                var type: NetworkDeviceType = .regular
-
-                                if ip == routerIP {
-                                    type = .router
-                                }
-
-                                self.devices.append(NetworkDevice(name: ip, host: ip, type: type))
+                                devices.append(NetworkDevice(name: ip, host: ip, type: ip == routerIP ? .router : .regular))
                             }
 
                             completedOperations += 1
-//                            let progress = Double(completedOperations) / Double(ips.count)
-                            //                    print("Progress: \(Int(progress * 100))%")
 
                             DispatchQueue.main.async {
                                 self.delegate?.networkScannerDidUpdateProgress(currentIndex: completedOperations, totalCount: ips.count)
                             }
                         }
 
-                        operationQueue.addOperation(o)
+                        return o
                     }
 
-                    operationQueue.waitUntilAllOperationsAreFinished()
-
-                    //            print("Time elapsed: ", Date().timeIntervalSince1970 - startTime, "sec")
+                    operationQueue.addOperations(operations, waitUntilFinished: true)
 
                     DispatchQueue.main.async {
                         self.delegate?.networkScannerDidFinishScanning(devices: self.combinedDevices)

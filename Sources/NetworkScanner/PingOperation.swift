@@ -73,7 +73,7 @@ class PingOperation: Operation {
 
         ping.host = host
         ping.delegate = self
-        ping.timeout = 2.0
+        ping.timeout = 4.0
         ping.pingPeriod = 1.0
 
         ping.setup { success, _ in

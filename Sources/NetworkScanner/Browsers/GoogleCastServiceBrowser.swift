@@ -43,7 +43,9 @@ class GoogleCastServiceBrowser {
         }
 
         browser.browseResultsChangedHandler = { _, changes in
-            browser.cancel()
+            if browser.state != .cancelled {
+                browser.cancel()
+            }
 
             for change in changes {
                 if case let .added(added) = change {
@@ -81,7 +83,9 @@ class GoogleCastServiceBrowser {
     }
 
     func stop() {
-        browser?.cancel()
+        if browser?.state != .cancelled {
+            browser?.cancel()
+        }
         browser = nil
     }
 }

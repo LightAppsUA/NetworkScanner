@@ -43,7 +43,9 @@ class AirPlayServiceBrowser {
         }
 
         browser.browseResultsChangedHandler = { _, changes in
-            browser.cancel()
+            if browser.state != .cancelled {
+                browser.cancel()
+            }
 
             for change in changes {
                 if case let .added(added) = change {
@@ -79,7 +81,9 @@ class AirPlayServiceBrowser {
     }
 
     func stop() {
-        browser?.cancel()
+        if browser?.state != .cancelled {
+            browser?.cancel()
+        }
         browser = nil
     }
 }

@@ -43,7 +43,9 @@ class AppleServiceBrowser {
         }
 
         browser.browseResultsChangedHandler = { _, changes in
-            browser.cancel()
+            if browser.state != .cancelled {
+                browser.cancel()
+            }
 
             for change in changes {
                 if case let .added(added) = change {
@@ -100,7 +102,9 @@ class AppleServiceBrowser {
     }
 
     func stop() {
-        browser?.cancel()
+        if browser?.state != .cancelled {
+            browser?.cancel()
+        }
         browser = nil
     }
 }
