@@ -118,7 +118,6 @@ public class NetworkScanner: NSObject {
 
                 let ips = self.ipRange(ipAddress: ipAddress, subnetMask: mask)
 
-                var startTime = Date().timeIntervalSince1970
                 var completedOperations = 0
 
                 DispatchQueue.global(qos: .userInitiated).async {
