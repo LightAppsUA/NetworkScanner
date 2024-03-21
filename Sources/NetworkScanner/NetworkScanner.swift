@@ -19,30 +19,30 @@ public class NetworkScanner: NSObject {
     public weak var delegate: NetworkScannerDelegate?
 
     private var combinedDevices: [NetworkDevice] {
-        var _devices = devices
+        var results = devices
 
-        for (index, device) in _devices.enumerated() {
+        for (index, device) in results.enumerated() {
             if let appleDevice = appleDevices.first(where: { $0.host == device.host }) {
-                _devices[index].macAddress = appleDevice.macAddress
-                _devices[index].name = appleDevice.name
-                _devices[index].type = .appleDevice
+                results[index].macAddress = appleDevice.macAddress
+                results[index].name = appleDevice.name
+                results[index].type = .appleDevice
             }
 
             if let airPlayDevice = airPlayDevices.first(where: { $0.host == device.host }) {
-                _devices[index].macAddress = airPlayDevice.macAddress
-                _devices[index].model = airPlayDevice.model
-                _devices[index].name = airPlayDevice.name
-                _devices[index].type = .airPlay
+                results[index].macAddress = airPlayDevice.macAddress
+                results[index].model = airPlayDevice.model
+                results[index].name = airPlayDevice.name
+                results[index].type = .airPlay
             }
 
             if let googleCastDevice = googleCastDevices.first(where: { $0.host == device.host }) {
-                _devices[index].name = googleCastDevice.name
-                _devices[index].model = googleCastDevice.model
-                _devices[index].type = .googleCast
+                results[index].name = googleCastDevice.name
+                results[index].model = googleCastDevice.model
+                results[index].type = .googleCast
             }
         }
 
-        return _devices
+        return results
     }
 
     private var timer: Timer?
@@ -92,8 +92,6 @@ public class NetworkScanner: NSObject {
                     self.appleDevices.append(copyDevice)
                 }
 
-                self.appleServiceBrowser.search()
-
                 self.airPlayServiceBrowser.deviceDiscovered = { device in
                     var copyDevice = device
                     if copyDevice.host == "127.0.0.1" {
@@ -102,8 +100,6 @@ public class NetworkScanner: NSObject {
 
                     self.airPlayDevices.append(copyDevice)
                 }
-
-                self.airPlayServiceBrowser.search()
 
                 self.googleCastServiceBrowser.deviceDiscovered = { device in
                     var copyDevice = device
@@ -114,6 +110,8 @@ public class NetworkScanner: NSObject {
                     self.googleCastDevices.append(copyDevice)
                 }
 
+                self.appleServiceBrowser.search()
+                self.airPlayServiceBrowser.search()
                 self.googleCastServiceBrowser.search()
 
                 let ips = self.ipRange(ipAddress: ipAddress, subnetMask: mask)
@@ -127,14 +125,13 @@ public class NetworkScanner: NSObject {
 
                     operationQueue.qualityOfService = .userInteractive
 
-                    let operations = ips.map {
-                        let ip = $0
-                        let o = PingOperation(host: ip)
+                    let operations = ips.map { ip in
+                        let operation = PingOperation(host: ip)
 
-                        o.completionBlock = { [weak self] in
+                        operation.completionBlock = { [weak self] in
                             guard let self else { return }
 
-                            if o.reachable {
+                            if operation.isReachable {
                                 devices.append(NetworkDevice(name: ip, host: ip, type: ip == routerIP ? .router : .regular))
                             }
 
@@ -145,7 +142,7 @@ public class NetworkScanner: NSObject {
                             }
                         }
 
-                        return o
+                        return operation
                     }
 
                     operationQueue.addOperations(operations, waitUntilFinished: true)
@@ -247,28 +244,5 @@ public class NetworkScanner: NSObject {
         }
 
         return netmask ?? ""
-    }
-}
-
-class NetworkUtility {
-    func getGatewayInfo(completionHandler: @escaping (String) -> Void) {
-        let monitor = NWPathMonitor(requiredInterfaceType: .wifi)
-        monitor.pathUpdateHandler = { path in
-            if path.status == .satisfied {
-                if let endpoint = path.gateways.first {
-                    switch endpoint {
-                    case let .hostPort(host, _):
-                        let remoteHost = host.debugDescription
-                        print("Gateway: \(remoteHost)")
-                        // Use callback here to return the ip address to the caller
-                        completionHandler(remoteHost)
-                    default:
-                        break
-                    }
-                }
-            }
-        }
-
-        monitor.start(queue: .global())
     }
 }

@@ -13,6 +13,12 @@ class PingOperation: Operation {
 
     let host: String
 
+    private var pinger: GBPing?
+    private var timeout: Int = 0
+    private var failedToSendPing: Int = 0
+
+    var isReachable: Bool = false
+
     init(host: String) {
         self.host = host
         super.init()
@@ -60,12 +66,6 @@ class PingOperation: Operation {
         main()
     }
 
-    var reachable: Bool = false
-
-    private var pinger: GBPing?
-
-    private var timeouted = 0
-
     override func main() {
         let ping = GBPing()
 
@@ -95,7 +95,7 @@ extension PingOperation: GBPingDelegate {
     func ping(_ pinger: GBPing, didReceiveReplyWith summary: GBPingSummary) {
 //        print("REPLY>\t\(summary)")
 
-        reachable = true
+        isReachable = true
 
         pinger.stop()
         finish()
@@ -111,9 +111,9 @@ extension PingOperation: GBPingDelegate {
 
     func ping(_ pinger: GBPing, didTimeoutWith summary: GBPingSummary) {
 //        print("TIMEOUT>\t\(summary)")
-        timeouted += 1
+        timeout += 1
 
-        if timeouted > 2 {
+        if timeout > 2 {
             pinger.stop()
             finish()
         }
@@ -135,5 +135,12 @@ extension PingOperation: GBPingDelegate {
 //                self.finish()
 //            }
 //        }
+
+        failedToSendPing += 1
+
+        if failedToSendPing > 10 {
+            pinger.stop()
+            finish()
+        }
     }
 }
