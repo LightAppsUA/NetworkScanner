@@ -1,8 +1,8 @@
 //
 //  NetworkDevice.swift
-//  NetworkScanner
 //
-//  Created by Артем Твердохлєбов on 06.03.2024.
+//  Copyright (c) 2024 Light Apps Studio
+//  Created on 05.04.2024.
 //
 
 import Foundation
