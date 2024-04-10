@@ -79,8 +79,8 @@ public class NetworkScanner: NSObject {
 
         localNetworkAuthorization.requestAuthorization { status in
             if status {
-                let ipAddress = self.getIPAddress()
-                let mask = self.getNetmask()
+                let ipAddress = Self.getLocalIPAddress()
+                let mask = Self.getLocalNetmask()
                 let routerIP = NetworkHelper.getRouterIP()
 
                 self.appleServiceBrowser.deviceDiscovered = { device in
@@ -184,7 +184,7 @@ public class NetworkScanner: NSObject {
         return ips
     }
 
-    private func getIPAddress() -> String {
+    static func getLocalIPAddress() -> String {
         var address: String?
         var ifaddr: UnsafeMutablePointer<ifaddrs>? = nil
 
@@ -215,7 +215,7 @@ public class NetworkScanner: NSObject {
         return address ?? ""
     }
 
-    private func getNetmask() -> String {
+    static func getLocalNetmask() -> String {
         var netmask: String?
         var ifaddr: UnsafeMutablePointer<ifaddrs>? = nil
 
