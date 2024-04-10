@@ -184,7 +184,7 @@ public class NetworkScanner: NSObject {
         return ips
     }
 
-    static func getLocalIPAddress() -> String {
+    public static func getLocalIPAddress() -> String {
         var address: String?
         var ifaddr: UnsafeMutablePointer<ifaddrs>? = nil
 
@@ -215,7 +215,7 @@ public class NetworkScanner: NSObject {
         return address ?? ""
     }
 
-    static func getLocalNetmask() -> String {
+    public static func getLocalNetmask() -> String {
         var netmask: String?
         var ifaddr: UnsafeMutablePointer<ifaddrs>? = nil
 
