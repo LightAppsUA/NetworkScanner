@@ -281,7 +281,7 @@
         return [NSString stringWithUTF8String:inet_ntoa(gatewayaddr)];
     }
     
-    return @"";
+    return nil;
 }
 
 @end

@@ -83,72 +83,74 @@ public class NetworkScanner: NSObject {
                 let mask = Self.getLocalNetmask()
                 let routerIP = NetworkHelper.getRouterIP()
 
-                self.appleServiceBrowser.deviceDiscovered = { device in
-                    var copyDevice = device
-                    if copyDevice.host == "127.0.0.1" {
-                        copyDevice.host = ipAddress
-                    }
-
-                    self.appleDevices.append(copyDevice)
-                }
-
-                self.airPlayServiceBrowser.deviceDiscovered = { device in
-                    var copyDevice = device
-                    if copyDevice.host == "127.0.0.1" {
-                        copyDevice.host = ipAddress
-                    }
-
-                    self.airPlayDevices.append(copyDevice)
-                }
-
-                self.googleCastServiceBrowser.deviceDiscovered = { device in
-                    var copyDevice = device
-                    if copyDevice.host == "127.0.0.1" {
-                        copyDevice.host = ipAddress
-                    }
-
-                    self.googleCastDevices.append(copyDevice)
-                }
-
-                self.appleServiceBrowser.search()
-                self.airPlayServiceBrowser.search()
-                self.googleCastServiceBrowser.search()
-
-                let ips = self.ipRange(ipAddress: ipAddress, subnetMask: mask)
-
-                var completedOperations = 0
-
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let operationQueue = OperationQueue()
-
-                    self.operationQueue = operationQueue
-
-                    operationQueue.qualityOfService = .userInteractive
-
-                    let operations = ips.map { ip in
-                        let operation = PingOperation(host: ip)
-
-                        operation.completionBlock = { [weak self] in
-                            guard let self else { return }
-
-                            if operation.isReachable {
-                                devices.append(NetworkDevice(name: ip, host: ip, type: ip == routerIP ? .router : .regular))
-                            }
-
-                            completedOperations += 1
-
-                            DispatchQueue.main.async {
-                                self.delegate?.networkScannerDidUpdateProgress(currentIndex: completedOperations, totalCount: ips.count)
-                            }
+                if let ipAddress, let mask {
+                    self.appleServiceBrowser.deviceDiscovered = { device in
+                        var copyDevice = device
+                        if copyDevice.host == "127.0.0.1" {
+                            copyDevice.host = ipAddress
                         }
 
-                        return operation
+                        self.appleDevices.append(copyDevice)
                     }
 
-                    operationQueue.addOperations(operations, waitUntilFinished: true)
+                    self.airPlayServiceBrowser.deviceDiscovered = { device in
+                        var copyDevice = device
+                        if copyDevice.host == "127.0.0.1" {
+                            copyDevice.host = ipAddress
+                        }
 
-                    DispatchQueue.main.async {
-                        self.delegate?.networkScannerDidFinishScanning(devices: self.combinedDevices)
+                        self.airPlayDevices.append(copyDevice)
+                    }
+
+                    self.googleCastServiceBrowser.deviceDiscovered = { device in
+                        var copyDevice = device
+                        if copyDevice.host == "127.0.0.1" {
+                            copyDevice.host = ipAddress
+                        }
+
+                        self.googleCastDevices.append(copyDevice)
+                    }
+
+                    self.appleServiceBrowser.search()
+                    self.airPlayServiceBrowser.search()
+                    self.googleCastServiceBrowser.search()
+
+                    let ips = self.ipRange(ipAddress: ipAddress, subnetMask: mask)
+
+                    var completedOperations = 0
+
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let operationQueue = OperationQueue()
+
+                        self.operationQueue = operationQueue
+
+                        operationQueue.qualityOfService = .userInteractive
+
+                        let operations = ips.map { ip in
+                            let operation = PingOperation(host: ip)
+
+                            operation.completionBlock = { [weak self] in
+                                guard let self else { return }
+
+                                if operation.isReachable {
+                                    devices.append(NetworkDevice(name: ip, host: ip, type: ip == routerIP ? .router : .regular))
+                                }
+
+                                completedOperations += 1
+
+                                DispatchQueue.main.async {
+                                    self.delegate?.networkScannerDidUpdateProgress(currentIndex: completedOperations, totalCount: ips.count)
+                                }
+                            }
+
+                            return operation
+                        }
+
+                        operationQueue.addOperations(operations, waitUntilFinished: true)
+
+                        DispatchQueue.main.async {
+                            self.delegate?.networkScannerDidFinishScanning(devices: self.combinedDevices)
+                        }
                     }
                 }
             }
@@ -184,7 +186,7 @@ public class NetworkScanner: NSObject {
         return ips
     }
 
-    public static func getLocalIPAddress() -> String {
+    public static func getLocalIPAddress() -> String? {
         var address: String?
         var ifaddr: UnsafeMutablePointer<ifaddrs>? = nil
 
@@ -212,10 +214,10 @@ public class NetworkScanner: NSObject {
             freeifaddrs(ifaddr)
         }
 
-        return address ?? ""
+        return address
     }
 
-    public static func getLocalNetmask() -> String {
+    public static func getLocalNetmask() -> String? {
         var netmask: String?
         var ifaddr: UnsafeMutablePointer<ifaddrs>? = nil
 
@@ -243,6 +245,6 @@ public class NetworkScanner: NSObject {
             freeifaddrs(ifaddr)
         }
 
-        return netmask ?? ""
+        return netmask
     }
 }
