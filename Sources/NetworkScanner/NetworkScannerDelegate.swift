@@ -10,5 +10,5 @@ import Foundation
 public protocol NetworkScannerDelegate: AnyObject {
     func networkScannerDidFinishScanning(devices: [NetworkDevice])
     func networkScannerDidUpdateProgress(currentIndex: Int, totalCount: Int)
-    func networkScannerFailed(error: Error)
+    func networkScannerDidFail(error: Error)
 }

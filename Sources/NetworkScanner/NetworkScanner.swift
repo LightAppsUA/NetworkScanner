@@ -109,7 +109,7 @@ public class NetworkScanner: NSObject {
 
         localNetworkAuthorization.requestAuthorization { status in
             guard !status else {
-                self.delegate?.networkScannerFailed(error: NetworkScannerError.permissionDenied)
+                self.delegate?.networkScannerDidFail(error: NetworkScannerError.permissionDenied)
                 return
             }
 
@@ -118,7 +118,7 @@ public class NetworkScanner: NSObject {
             let routerIP = NetworkHelper.getRouterIP()
 
             guard let ipAddress, let mask else {
-                self.delegate?.networkScannerFailed(error: NetworkScannerError.noNetwork)
+                self.delegate?.networkScannerDidFail(error: NetworkScannerError.noNetwork)
                 return
             }
 

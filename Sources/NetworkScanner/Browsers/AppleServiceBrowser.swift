@@ -83,7 +83,7 @@ class AppleServiceBrowser {
 
                                                         self.deviceDiscovered?(device)
                                                     case let .failure(error):
-                                                        logger.error("Service did not resolve, error: \(error)")
+                                                        self.logger.error("Service did not resolve, error: \(error)")
                                                     }
                                                 }
                                             }
