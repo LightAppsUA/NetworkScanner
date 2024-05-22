@@ -108,7 +108,7 @@ public class NetworkScanner: NSObject {
         stop()
 
         localNetworkAuthorization.requestAuthorization { status in
-            guard !status else {
+            guard status else {
                 self.delegate?.networkScannerDidFail(error: NetworkScannerError.permissionDenied)
                 return
             }
