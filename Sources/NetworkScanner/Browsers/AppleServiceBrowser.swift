@@ -7,6 +7,7 @@
 
 import Foundation
 import Network
+import os
 
 class AppleServiceBrowser {
     private let type: String = "_apple-mobdev2._tcp"
@@ -14,6 +15,8 @@ class AppleServiceBrowser {
     private var browser: NWBrowser?
 
     var deviceDiscovered: ((NetworkDevice) -> Void)?
+
+    private let logger = Logger()
 
     private let connectionParameters: NWParameters = {
         let parameters = NWParameters.udp
@@ -80,7 +83,7 @@ class AppleServiceBrowser {
 
                                                         self.deviceDiscovered?(device)
                                                     case let .failure(error):
-                                                        print("Service did not resolve, error: \(error)")
+                                                        logger.error("Service did not resolve, error: \(error)")
                                                     }
                                                 }
                                             }

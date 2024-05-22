@@ -7,11 +7,14 @@
 
 import Foundation
 import Network
+import os
 
 public class LocalNetworkAuthorization: NSObject {
     private var browser: NWBrowser?
     private var netService: NetService?
     private var completion: ((Bool) -> Void)?
+
+    private let logger = Logger()
 
     public func requestAuthorization(completion: @escaping (Bool) -> Void) {
         self.completion = completion
@@ -26,11 +29,11 @@ public class LocalNetworkAuthorization: NSObject {
         browser.stateUpdateHandler = { newState in
             switch newState {
             case let .failed(error):
-                print(error.localizedDescription)
+                self.logger.error("NWBrowser error: \(error.localizedDescription)")
             case .ready, .cancelled:
                 break
             case let .waiting(error):
-                print("Local network permission has been denied: \(error)")
+                self.logger.warning("Local network permission has been denied: \(error)")
                 self.reset()
                 self.completion?(false)
             default:
@@ -56,7 +59,7 @@ public class LocalNetworkAuthorization: NSObject {
 extension LocalNetworkAuthorization: NetServiceDelegate {
     public func netServiceDidPublish(_ sender: NetService) {
         reset()
-        print("Local network permission has been granted")
+        logger.info("Local network permission has been granted")
         completion?(true)
     }
 }

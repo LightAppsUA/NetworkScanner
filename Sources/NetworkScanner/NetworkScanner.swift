@@ -8,6 +8,9 @@
 import Foundation
 import Network
 import NetworkScannerInternal
+import os
+
+let localhost = "127.0.0.1"
 
 public class NetworkScanner: NSObject {
     private lazy var localNetworkAuthorization = LocalNetworkAuthorization()
@@ -17,6 +20,14 @@ public class NetworkScanner: NSObject {
     private var googleCastDevices: [NetworkDevice] = []
 
     public weak var delegate: NetworkScannerDelegate?
+
+    private let logger = Logger()
+
+    override public init() {
+        super.init()
+
+        checkForInfoDictionary()
+    }
 
     private var combinedDevices: [NetworkDevice] {
         var results = devices
@@ -74,84 +85,109 @@ public class NetworkScanner: NSObject {
         devices = []
     }
 
+    private func checkForInfoDictionary() {
+        if let bundleDict = Bundle.main.infoDictionary, let bonjourServices = bundleDict["NSBonjourServices"] as? [String] {
+            if !bonjourServices.contains("_lnp._tcp"), !bonjourServices.contains("_bonjour._tcp") {
+                logger.warning("Discovery will not work without \"_lnp._tcp\" and \"_bonjour._tcp\"")
+            }
+            if !bonjourServices.contains("_googlecast._tcp") {
+                logger.warning("Discovery of Google Cast devices is limited")
+            }
+            if !bonjourServices.contains("_airplay._tcp") {
+                logger.warning("Discovery of AirPlay devices is limited")
+            }
+            if !bonjourServices.contains("_apple-mobdev2._tcp") {
+                logger.warning("Discovery of Apple devices is limited")
+            }
+        } else {
+            logger.warning("NSBonjourServices is not defined in Info.plist")
+        }
+    }
+
     public func start() {
         stop()
 
         localNetworkAuthorization.requestAuthorization { status in
-            if status {
-                let ipAddress = Self.getLocalIPAddress()
-                let mask = Self.getLocalNetmask()
-                let routerIP = NetworkHelper.getRouterIP()
+            guard !status else {
+                self.delegate?.networkScannerFailed(error: NetworkScannerError.permissionDenied)
+                return
+            }
 
-                if let ipAddress, let mask {
-                    self.appleServiceBrowser.deviceDiscovered = { device in
-                        var copyDevice = device
-                        if copyDevice.host == "127.0.0.1" {
-                            copyDevice.host = ipAddress
+            let ipAddress = Self.getLocalIPAddress()
+            let mask = Self.getLocalNetmask()
+            let routerIP = NetworkHelper.getRouterIP()
+
+            guard let ipAddress, let mask else {
+                self.delegate?.networkScannerFailed(error: NetworkScannerError.noNetwork)
+                return
+            }
+
+            self.appleServiceBrowser.deviceDiscovered = { device in
+                var copyDevice = device
+                if copyDevice.host == localhost {
+                    copyDevice.host = ipAddress
+                }
+
+                self.appleDevices.append(copyDevice)
+            }
+
+            self.airPlayServiceBrowser.deviceDiscovered = { device in
+                var copyDevice = device
+                if copyDevice.host == localhost {
+                    copyDevice.host = ipAddress
+                }
+
+                self.airPlayDevices.append(copyDevice)
+            }
+
+            self.googleCastServiceBrowser.deviceDiscovered = { device in
+                var copyDevice = device
+                if copyDevice.host == localhost {
+                    copyDevice.host = ipAddress
+                }
+
+                self.googleCastDevices.append(copyDevice)
+            }
+
+            self.appleServiceBrowser.search()
+            self.airPlayServiceBrowser.search()
+            self.googleCastServiceBrowser.search()
+
+            let IPs = self.ipRange(ipAddress: ipAddress, subnetMask: mask)
+
+            var completedOperations = 0
+
+            DispatchQueue.global(qos: .userInitiated).async {
+                let operationQueue = OperationQueue()
+
+                self.operationQueue = operationQueue
+
+                operationQueue.qualityOfService = .userInteractive
+
+                let operations = IPs.map { ip in
+                    let operation = PingOperation(host: ip)
+
+                    operation.completionBlock = { [weak self] in
+                        guard let self else { return }
+
+                        if operation.isReachable {
+                            devices.append(NetworkDevice(name: ip, host: ip, type: ip == routerIP ? .router : .regular))
                         }
 
-                        self.appleDevices.append(copyDevice)
-                    }
-
-                    self.airPlayServiceBrowser.deviceDiscovered = { device in
-                        var copyDevice = device
-                        if copyDevice.host == "127.0.0.1" {
-                            copyDevice.host = ipAddress
-                        }
-
-                        self.airPlayDevices.append(copyDevice)
-                    }
-
-                    self.googleCastServiceBrowser.deviceDiscovered = { device in
-                        var copyDevice = device
-                        if copyDevice.host == "127.0.0.1" {
-                            copyDevice.host = ipAddress
-                        }
-
-                        self.googleCastDevices.append(copyDevice)
-                    }
-
-                    self.appleServiceBrowser.search()
-                    self.airPlayServiceBrowser.search()
-                    self.googleCastServiceBrowser.search()
-
-                    let ips = self.ipRange(ipAddress: ipAddress, subnetMask: mask)
-
-                    var completedOperations = 0
-
-                    DispatchQueue.global(qos: .userInitiated).async {
-                        let operationQueue = OperationQueue()
-
-                        self.operationQueue = operationQueue
-
-                        operationQueue.qualityOfService = .userInteractive
-
-                        let operations = ips.map { ip in
-                            let operation = PingOperation(host: ip)
-
-                            operation.completionBlock = { [weak self] in
-                                guard let self else { return }
-
-                                if operation.isReachable {
-                                    devices.append(NetworkDevice(name: ip, host: ip, type: ip == routerIP ? .router : .regular))
-                                }
-
-                                completedOperations += 1
-
-                                DispatchQueue.main.async {
-                                    self.delegate?.networkScannerDidUpdateProgress(currentIndex: completedOperations, totalCount: ips.count)
-                                }
-                            }
-
-                            return operation
-                        }
-
-                        operationQueue.addOperations(operations, waitUntilFinished: true)
+                        completedOperations += 1
 
                         DispatchQueue.main.async {
-                            self.delegate?.networkScannerDidFinishScanning(devices: self.combinedDevices)
+                            self.delegate?.networkScannerDidUpdateProgress(currentIndex: completedOperations, totalCount: IPs.count)
                         }
                     }
+
+                    return operation
+                }
+
+                operationQueue.addOperations(operations, waitUntilFinished: true)
+
+                DispatchQueue.main.async {
+                    self.delegate?.networkScannerDidFinishScanning(devices: self.combinedDevices)
                 }
             }
         }
